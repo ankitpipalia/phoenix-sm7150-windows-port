@@ -63,7 +63,8 @@ never returns, and ~16–17 s later the phone resets. A marker build (printing
 splits) placed the hang precisely: everything up to and including `SdccDxe`
 starts and returns `Success`; `UFSDxe` starts and does not.
 
-Root cause, found by byte-diffing the drivers, disassembly and Mu git history:
+Leading causal explanation, supported by driver diffs, disassembly, Mu history
+and the successful hardware configurations below:
 
 - Since Mu commit `d3f5d84c` (2026-06-29, *"MooreaPkg: Enable MMU Detach"*), the
   SM7150 SEC calls `ArmSmmuDetach` and keeps only the display's eight stream IDs.
@@ -99,6 +100,13 @@ Two hardware runs confirmed it:
 What both share is that **UFS gets a working SMMU mapping**. Run 4's design is
 the one carried forward, because it matches what upstream runs on the active
 surya target. (Patches 01+02 are that design.)
+
+These runs changed multiple components: run 3 also restored the old coherency
+setup, while run 4 changed UFS, HALIOMMU and DALSys together. They establish
+working configurations and strongly support the mapping explanation, but do
+not isolate SMMU detach as the sole cause. "UFS intact" above means no damage
+was detected in the checks performed, not that no storage writes occurred;
+Linux writes during normal boot.
 
 ## 3. The FFU hazard — a hard safety gate
 

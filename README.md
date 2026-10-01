@@ -14,6 +14,13 @@ a Microsoft ISO you supply.
 > are non-functional (see below). This is a proof of concept, not a daily
 > driver. Read [docs/handoff.md](docs/handoff.md) before continuing the work.
 
+**Latest result (2026-10-01):** v2 with only `qcusbcucsi` disabled reaches the
+desktop, but power-button wake still crashes (`0xA0 / 0x605 / notification
+0x27`). Original v2 instead fails with `0x14E`. USB Ethernet/SSH reachability,
+touch and landscape remain unverified or non-working. Start an independent
+review with [docs/review-request.md](docs/review-request.md); do not treat the
+old v2 power settings as a verified fix.
+
 ## How it got here
 
 phoenix is an *inactive* target in [Project Silicium's
@@ -70,6 +77,8 @@ postmarketOS phoenix port (the Linux the device normally runs).
 
 - [docs/handoff.md](docs/handoff.md) — **start here**: current state, what works,
   what's open, exact artifact hashes, next steps, the offline-debug loop.
+- [docs/review-request.md](docs/review-request.md) — current blockers, evidence,
+  corrections, and focused questions for an independent reviewer.
 - [docs/uefi.md](docs/uefi.md) — building the UEFI, the UFS freeze and its fix, the FFU hazard.
 - [docs/acpi-audit.md](docs/acpi-audit.md) — the borrowed-ACPI risk analysis and the driver set it justifies.
 - [docs/deployment.md](docs/deployment.md) — end-to-end install workflow.

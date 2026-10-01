@@ -86,9 +86,32 @@ Windows — the clock is wrong, not the files.
 
 - It confirmed Windows reached the desktop (all installed drivers `BOOTLOG_LOADED`, no relevant failures).
 - It read the power-button crash as bugcheck `0xA0 INTERNAL_POWER_ERROR` — a
-  power-transition failure, which is why the fix is to disable modern standby
-  and change the power-button action rather than chase a driver.
+  PEP notification failure. The attempted v2 power-policy workaround did not
+  fix it; the latest dump identifies notification 0x27. See
+  [review-request.md](review-request.md). Policy changes may avoid a trigger,
+  but the PEP/Windows compatibility issue still needs diagnosis.
 - `ntfscp` can also **write** single files back to the volume, so small fixes
   (a config file, a registry hive edited on the host with `hivex`) can be
   applied without a full 15-minute partition reflash. Driver changes still need
   the PC + DISM + reflash path, because they touch the driver store and catalog.
+
+## Current read-only precautions and observed limitations
+
+Identify the WIN partition by its expected layout/PARTUUID, set its kernel
+block-device read-only flag with `blockdev --setro`, and verify `--getro` before
+reading. Do not assume a RAM rescue image makes explicit disk-write commands
+safe. No raw UFS USB mass-storage exposure is needed.
+
+The tested ntfsprogs build required paths **without** a leading slash, e.g.
+`Windows/System32/config/SYSTEM`. Confirm the actual tar layout; the bundle
+used during the latest review had `/tmp/bin` and `/tmp/lib`, not `/tmp/b/...`.
+Set `LD_LIBRARY_PATH` in each new shell session.
+
+On this Mac, `nc` telnet worked while the Python helper returned "No route to
+host". Treat that as a host-client limitation, not proof the phone is offline.
+
+An attempted `ntfscp` hive write was refused because NTFS metadata was unclean.
+The original hive hash remained unchanged. **Do not clear the NTFS journal or
+bypass hibernation/dirty-volume protection to force an edit.** The subsequent
+control was prepared on a separate PC VHDX and explicitly authorized for a
+WIN-only reflash. Missing logs alone do not prove Windows wrote nothing.

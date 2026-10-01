@@ -22,9 +22,14 @@ the audit scratch tree (gitignored).
 
 ## Result
 
-**No regulator vote can over-volt a phoenix rail.** None of the 125 PMIC votes
+**No over-voltage vote was found in the audited data.** None of the 125 PMIC votes
 in the DSDT or in the PEP data the Moorea pack installs exceeds phoenix's
 limit for that rail **[V]**.
+
+This is a static audit, not a guarantee of runtime electrical safety. Driver
+initialization, shared resources, inferred GPIO numbering and unobserved
+firmware actions remain review points. In particular, do not assume a missing
+function driver makes every PEP action unreachable.
 
 The tables never touch memory-mapped hardware from AML:
 - no SystemMemory or SystemIO operation regions;
@@ -35,8 +40,10 @@ Every board-specific hardware action is one of:
 - a `_CRS` GPIO, I2C or SPI resource;
 - the panel configuration blob.
 
-None of these runs unless **a driver for that device is installed** and starts
-it. The risk is therefore chosen by the driver set.
+The original audit treated these as actions triggered when the corresponding
+device driver starts. That reachability assumption needs independent review,
+particularly for shared PEP resources and initialization. Driver selection
+limits risk but is not a complete safety boundary.
 
 ## Board mismatches that matter (each only with the named driver)
 
@@ -47,7 +54,7 @@ it. The risk is therefore chosen by the driver set.
 | `tas256X_win` | Interrupts on GPIO 91 (phoenix: DS28E16 battery-authentication line) and GPIO 8 (phoenix: touch reset) | L41408 **[V]** |
 | audio stack | GPIO 63–66 muxed to TSIF functions (phoenix: 63 = fingerprint 1.8 V enable, 66 = amp reset); GPIO 24/51/52 driven at 16 mA | L3142–3245 **[V]** |
 | `qcipa` / `x3n_ipa` | Drives GPIO 12 low at 16 mA (phoenix: camera pin, held high) | L19505 **[V]** |
-| USB / UCSI | Switches PM6150 GPIO7 (unused on phoenix) and may drive TLMM GPIO 104 (phoenix's disabled DisplayPort orientation pin). USB cannot start without UCSI. | L2095, L42673 **[I]** |
+| USB / UCSI | Switches PM6150 GPIO7 (unused in the audited phoenix DTs) and may drive TLMM GPIO 104. The borrowed URS0 depends on UCS0. Original v2 fails with UCSI enabled; the disabled control boots without a visible URS controller. Removing that dependency for a static-host test is not yet validated. | L2095, L42673 **[I]**; latest state in review-request.md |
 | subsystems / PIL / TrEE | Load surya-built DSP, modem and Wi-Fi firmware, board data and surya's `goodixfp.mbn` | packs **[V]**; effect **[I]** |
 
 These all match phoenix **[V]**:
@@ -116,3 +123,6 @@ It is not built into any image.
 - Confirm on hardware what PM6150 GPIO6/GPIO7 and TLMM GPIO 33/104 connect to
   before enabling USB.
 - Phoenix's GPU speed bin is unknown.
+- The surya `nt36xxx.inf` references `j20s_novatek_ts_fw01/02.bin`; phoenix's
+  stock overlay names `novatek_nt36672c_g7b_fw01/02.bin`. Audit firmware upload
+  behavior and matching before testing touch, even after correcting SPI wiring.

@@ -1,6 +1,6 @@
 # Handoff — phoenix Windows on Arm
 
-Written 2026-10-01 for whoever (human or agent) continues this. It is the
+Updated 2026-10-01 for whoever (human or agent) continues this. It is the
 single entry point: current state, what works, what is open, the exact
 artifacts, and the next steps. Operational access details (device IP,
 credentials, local file paths, the exact in-flight image) are **not** in this
@@ -12,10 +12,13 @@ Windows 11 Arm64 **boots to the desktop on real phoenix hardware.** The UEFI
 UFS freeze is fixed, phoenix runs on borrowed surya + Moorea ACPI tables,
 `userdata` was replaced by an `esp`+`win` layout, Windows 11 Pro 25H2 was
 flashed, and the tested UEFI replaced U-Boot in `boot`. Storage, the side
-buttons and the framebuffer work. **Open:** touch, landscape orientation, the
-USB-C dock (USB host), and a power-button crash — a second, updated image that
-addresses the crash and adds the USB-host + SSH drivers is **built and waiting
-to be flashed** (see "In flight").
+buttons and the framebuffer work. **Open:** touch, landscape orientation,
+USB-C dock/ Ethernet, and a power-button crash. Original v2 was flashed and
+failed with `0x14E`; a control with only UCSI disabled then reached the desktop
+but still crashes on display-off/wake. SSH is configured, not remotely
+verified. The phone was last inspected in a RAM rescue shell with Windows
+storage read-only. See [review-request.md](review-request.md) before making
+changes: it supersedes the earlier optimistic v2 claims.
 
 ## Device facts
 
@@ -50,31 +53,43 @@ to be flashed** (see "In flight").
 | UEFI boot / BDS | works | UFS freeze fixed; see [uefi.md](uefi.md). Runs 3 & 4 booted to BDS; Windows boots from the ESP. |
 | UFS (storage) | works | inbox `storufs`; `BOOTLOG_LOADED`. |
 | Side buttons | works | inbox `hidinterrupt` + `qcpmicgpio`. |
-| Display | **portrait only** | BasicDisplay on the UEFI framebuffer; 1080×2400, no rotation. Landscape needs the GPU driver (excluded — panel-rail mismatch) or a BasicDisplay rotation set live. |
-| Touch | **not working** | no driver installed. surya's DSDT describes a *different* touch bus (SPI 0x880000) than phoenix (SPI 0x890000); needs a phoenix touch device in the DSDT + `nt36xxx`. See [acpi-audit.md](acpi-audit.md) risk #1. |
-| USB-C dock (host) | **not working on image v1** | v1 had no USB-host drivers. v2 (in flight) adds UCSI + XhciFilter + URS ext. Type-C role detection is non-functional per the BSP; forcing host role may be needed. |
-| Power button | **crashes (v1)** | press → display off; press again → bugcheck `0xA0 INTERNAL_POWER_ERROR` (subcode 0x605), a power-transition failure. v2 disables modern standby and sets the button to do nothing. |
+| Display | **portrait only** | BasicDisplay, 1080×2400. Supported rotation has not been tested; do not assume registry edits or BasicDisplay can rotate it. Surya GPU/panel setup remains excluded. |
+| Touch | **not working** | no driver installed. Phoenix needs SPI 0x890000, appropriate PEP pinmux/resources and phoenix firmware. Surya's touch INF references j20s firmware, not phoenix's g7b firmware. |
+| USB-C dock (host) | **not working** | original v2 UCSI-enabled boot fails; UCSI-disabled control boots, but ACPI URS0 depends on UCS0 and no URS controller appears in the saved Enum tree. |
+| SSH | **configured, unreachable** | automatic sshd service and PID file observed; no working network path or successful phone SSH authentication yet. |
+| Power button | **still crashes** | UCSI-disabled v2 dump: 0xA0, parameters 0x605 / 0x27 / plugin pointer / 0. Previous offline button edits target wrong brace-wrapped GUID keys. |
 | Battery / thermal / CPU-freq | non-functional | SM7150 BSP limitation. No thermal or charge management under Windows — keep sessions short and supervised. |
 
-## In flight — the v2 image (built, not yet flashed)
+## Deployment history — v2 and the UCSI-disabled control
 
-A second Windows image is finalized on the Windows PC's VHDX, **not yet on the
-phone**. The phone still runs image **v1**. The partition layout is identical
-(same GUIDs/sizes), so resuming only needs reflashing `esp` and `win` — the GPT
-and `boot` are already correct.
+Original v2 was flashed to ESP and WIN; all fastboot writes returned OKAY.
+It failed with `SOC_CRITICAL_DEVICE_REMOVED (0x14E)`, photo parameters
+`0x71706530`, `0x15`, `0`, `0`. The signature matches PEP bugcheck call sites,
+but does not identify a unique device or prove physical removal. Booting
+without a USB cable also failed (owner report; fresh parameters not supplied).
+
+Next, a copy of the PC master was changed only semantically at
+`ControlSet001\Services\qcusbcucsi\Start`: DWORD 3 → 4. Full registry-tree
+comparison verified that single value change. Windows mounting also changed
+filesystem metadata, so this was **not** a byte-only whole-image comparison.
+Only WIN was reflashed; ESP, GPT, boot and firmware partitions were preserved.
+The owner reports desktop boot; fresh offline files confirm Windows ran,
+UCSI remains disabled, and a subsequent power-button crash produced a dump.
 
 v2 adds, over v1:
-- **USB-host + Type-C drivers** (`windows/usb-drivers.txt`: UCSI `qcusbcucsi7150`,
-  `QcXhciFilter7150`, URS ext `qcursext`), so the dock and its Ethernet can
-  enumerate.
+- **USB-host + Type-C drivers** (private v2 manifest: UCSI `qcusbcucsi7150`,
+  `QcXhciFilter7150`, URS ext `qcursext`), intended to enable the dock.
+  Host enumeration and Ethernet did not work in the tests so far.
 - **OpenSSH Server (ARM64 10.0), public-key auth**, installed fully offline:
   host keys + `administrators_authorized_keys` in `ProgramData\ssh` (ACLs
   locked to SYSTEM+Administrators), the `sshd` service created in the SYSTEM
   hive with `Start=2`. No account password needed (autologon stays). RDP also
   enabled (`fDenyTSConnections=0`, blank-password remote allowed). Firewall
   disabled on all profiles (dev device).
-- **Power fix:** `Power\CsEnabled=0` (modern standby off), power+sleep buttons
-  set to "do nothing" in the default schemes. Stops the `0xA0` crash.
+- **Attempted power workaround (ineffective):** `Power\CsEnabled=0` and button
+  defaults were edited. Modern-standby disablement was not verified. The
+  button edits used `{GUID}` key names while Windows' existing keys use
+  unbraced GUIDs; real defaults retained nonzero values. The crash persists.
 
 v2 partition hashes (raw, read from the VHDX re-attached read-only):
 - `esp`: `489ba62727577bee0827009e51a6c759ba3b791da0ea16b36b0b090fd887b212`
@@ -84,32 +99,30 @@ v2 partition hashes (raw, read from the VHDX re-attached read-only):
 `tools/vhdx-to-android-sparse.py` prints the same `esp`/`win` hashes as
 "expanded sha256" when it converts them — they must match before flashing.
 
-### Resume checklist
+UCSI-disabled control artifact hashes:
 
-1. Phone to fastboot (`fastboot reboot-bootloader`, or Vol-Down+Power).
-2. Copy the v2 VHDX from the PC to the host; convert `esp` and `win` with
-   `tools/vhdx-to-android-sparse.py` (use `--zero-unallocated` for the ESP);
-   check the expanded hashes equal the v2 hashes above.
-3. `device/flash-windows.sh esp.sparse.img win.sparse.img` (checks sizes against ABL).
-4. Boot the UEFI (already in `boot`) — the phone boots Windows on its own.
-5. Verify with the rescue shell ([rescue-shell.md](rescue-shell.md)): did
-   `qcusbcucsi7150`/`qcxhcifilter`/`qcursext` load, is `sshd` running? If the
-   dock enumerates, its Ethernet gives SSH/RDP → iterate live.
+- Sparse WIN file: `f0b6b520c722664fb25bd92847f68d01871324ae0be87163558b39f08d9a849c`.
+- Expanded WIN/raw PC partition: `91de0202833a9026ce048cb79c84a4812a9e227b41b435c410e2099e618f5c38`.
+- Expanded size: 114442633216 bytes. All 20 fastboot writes returned OKAY.
+- DONT_CARE areas may retain old phone bytes; image hashes are not full-device
+  readback verification. The control artifact is private and its operational
+  one-service patch script is not yet integrated into this repo's builder.
 
-### Then, live over SSH (fast, no reflash)
+### Resume checklist — review before another flash
 
-- **Landscape (#1):** flip the BasicDisplay rotation and revert instantly while
-  watching. The monitor config is in the SYSTEM hive at
-  `…\GraphicsDrivers\Configuration\MSNILNOEDID_1414_008D_…\00` (currently
-  `PrimSurfSize.cx=0x438` (1080), `cy=0x960` (2400), no rotation). Do this live,
-  not baked into a reflash — a wrong rotation can black-screen.
-- **Touch (#2):** needs ACPI work — add a phoenix touch device (SPI 0x890000,
-  reset/IRQ GPIO 8/9 per the audit) to the DSDT, rebuild the UEFI
-  (`uefi/build.sh`), add `nt36xxx`. This is a UEFI rebuild + `boot` reflash.
-- If USB host does **not** come up: the Type-C role-switch extension sets
-  `RoleSwitchMode=3` (auto, which needs the non-functional detection). Try
-  forcing host: set the URS extension's role to host, or statically bind the
-  host child. Debug via the offline loop (no live SSH needed).
+1. Read [review-request.md](review-request.md) and obtain the private evidence
+   from the owner if needed. No static-host, touch or rotation fix has been
+   built/deployed since the UCSI-disabled test.
+2. Preserve the current Windows logs/hive/dump before replacing WIN again.
+   A full reflash loses new Windows files and runtime state.
+3. Review a minimal static-host design (including URS0's dependency on UCS0)
+   without re-enabling the known-failing UCSI path blindly.
+4. Correct effective power policy as a **workaround**, then investigate why
+   PEP rejects notification 0x27. Do not suppress the bugcheck or claim sleep
+   is supported merely because the button no longer triggers it.
+5. Establish dock Ethernet and verify sshd/authentication before live display
+   tests. Audit phoenix touch resources and firmware before installing it.
+6. Keep owner present, backup/rollback available and image/FFU gates enforced.
 
 ## The offline-debug loop (how to see results without Windows online)
 
