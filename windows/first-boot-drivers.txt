@@ -1,0 +1,27 @@
+# phoenix first-boot driver set (paths relative to -DriverRoot of
+# Install-PhoenixWindows.ps1). Chosen by the ACPI audit, docs/acpi-audit.md:
+# no regulator vote above a phoenix limit, and none of these act on a pin that
+# phoenix wires differently from surya.
+#
+# Project-Aloha/windows_silicon_qcom_moorea @ 3a2f39b
+windows_silicon_qcom_moorea\Drivers\HALs\Timer\HalExtQCTimer7150.inf
+windows_silicon_qcom_moorea\Drivers\HALs\WatchDog\HalExtQCWdogTimer7150.inf
+# UFS0 (the boot disk) depends on PEP0 -> PMIC -> SPMI; all boot-start.
+windows_silicon_qcom_moorea\Drivers\SOC\SPMI\qcspmi7150.inf
+windows_silicon_qcom_moorea\Drivers\SOC\PMIC\Core\qcpmic7150.inf
+# Only the desktop PEP variant: wd and wp share one binary, both would be ambiguous.
+windows_silicon_qcom_moorea\Drivers\SOC\PowerManagement\qcpep.wd7150.inf
+windows_silicon_qcom_moorea\Drivers\SOC\GPIO\qcgpio7150.inf
+# Power and volume keys (inputs only).
+windows_silicon_qcom_moorea\Drivers\SOC\PMIC\GPIO\qcpmicgpio7150.inf
+#
+# Deliberately NOT included yet (docs/acpi-audit.md has the evidence):
+#   qcspi7150 / x3n_spi, nt36xxx  surya's SPI1 PEP block re-muxes GPIO 49-52, which
+#                                 are phoenix's speaker-amp I2S pins
+#   qcdx7150 / x3n_dx             surya panel power-up: LDO18_A 2.8 V (phoenix 3.0 V),
+#                                 toggles PM6150L GPIO3 (phoenix camera supply)
+#   audio stack, tas256X, AW8624  reconfigure GPIO 8/24/51/52/63-66/91
+#   qcipa / x3n_ipa               drives GPIO 12 low
+#   USB / UCSI                    PM6150 GPIO7 and TLMM GPIO 104 unconfirmed on phoenix
+#   subsystems, PIL, TrEE         would load surya-built firmware
+#   battery, ADC, BCL             surya's battery and thermistor data

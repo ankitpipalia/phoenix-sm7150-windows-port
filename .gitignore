@@ -1,0 +1,20 @@
+# Build outputs and large/binary artifacts never enter the tree.
+out/
+*.img
+*.vhdx
+*.zst
+*.wim
+*.iso
+*.efi
+*.ko
+*.dtb
+*.bin
+*.tar
+*.dmp
+__pycache__/
+*.pyc
+# Device-private data: backups contain IMEI, keys and calibration.
+backup/
+*-backup-*/
+ssh_host_*
+*authorized_keys
